@@ -1,9 +1,11 @@
 import { RPM } from "../path.js"
 import { CameraProperties } from "../../System/System/CameraProperties.js";
+import { MapProperties } from "../../System/System/MapProperties.js";
 import { MapPortion } from "../../System/Core/MapPortion.js";
 import { MapObject } from "../../System/Core/MapObject.js";
 import { Camera } from "../../System/Core/Camera.js";
 import {Map} from "../../System/Scene/Map.js";
+import { THREE } from "../../System/Globals.js";
 import { System, Manager, Datas, Scene} from "../../System/index.js";
 const pluginName = "Origami-Flat-Camera";
 const inject = RPM.Manager.Plugins.inject;
@@ -39,6 +41,7 @@ const inject = RPM.Manager.Plugins.inject;
     var originAngle = 0;
     //Elevation level of player before starting.
     var originROT = 0; //Original angle for facing planes.
+    var timeRate = 0;
 
     var CamTransitioning = false; //Determines if the transitioning sequence is occuring. Also informs what is transitioning (2D or 3D?)
     var transitionFaceSprites = false;
@@ -49,14 +52,13 @@ const inject = RPM.Manager.Plugins.inject;
         console.log("In Map Transition");
         //Only when transition from 3D does it set these variables.
         //RPM.Scene
-        /*
-        if(RPM.currentMap.camera.threeCamera.fov){
-            originROT = RPM.game.hero.mesh.rotation.x; //Original rotation. All face sprites are rotated.
+        console.log(Scene.Map.current.camera.getThreeCamera());
+        if(Scene.Map.current.camera.getThreeCamera().fov){
+            originROT = RPM.Core.Game.current.hero.mesh.rotation.x; //Original rotation. All face sprites are rotated.
         }
 
         transitionFaceSprites = false
         this.updateTransitionCameras(CamTransitioning); 
-        */
     }
 
     //Changes camera into perspective 3D camera.
@@ -67,11 +69,10 @@ const inject = RPM.Manager.Plugins.inject;
         transitionFaceSprites = false
         this.updateTransitionCameras(CamTransitioning); 
     }
-    /*
 
     //Transitions to the opposite current camera...2D -> 3D, 3D -> 2D.
     Map.prototype.TransitionToNextCam =  function(){
-        if(RPM.currentMap.camera.threeCamera.fov)
+        if(Scene.Map.current.camera.threeCamera.fov)
             this.TransitionTo2D();
         else
             this.TransitionTo3D();
@@ -80,7 +81,7 @@ const inject = RPM.Manager.Plugins.inject;
 
     //Changes camera WITHOUT transitions.
     Map.prototype.ChangeToCamera =  function(cam){
-        RPM.currentMap.camera = cameras[cam];
+        Scene.Map.current.camera = cameras[cam];
         if(cam === "Orthographic"){
             this.RotateAllFaceSprites(55.5, false);
         }else if(cam === "Perspective"){
@@ -106,6 +107,8 @@ const inject = RPM.Manager.Plugins.inject;
     var Alias_update = Map.prototype.update;
     Map.prototype.update =  function(){  
         Alias_update.call(this);
+        if(!cameras["Perspective"])
+            cameras["Perspective"] = Scene.Map.current.camera;
         if(CamTransitioning)
             this.updateTransitionCameras(CamTransitioning);
     }
@@ -114,21 +117,23 @@ const inject = RPM.Manager.Plugins.inject;
     //Controls the sequence and input of switching cameras from 2D to 3D.
     Map.prototype.updateTransitionCameras =  function(Dim){
         //Checks if has a fov, if not then it is orthographic.
-        if(this.camera.threeCamera.fov){
+        if(this.camera.getThreeCamera().fov){
             //It is 3D
             if(Dim === "3D") //Are we transitioning to 3D while still in 3D?
                 if(transitionFaceSprites) //When going to 3D, we need to turn perspective back on.
                 {
 
-                    RPM.currentMap.camera = cameras["Perspective"];
+                    Scene.Map.current.camera = cameras["Perspective"];
                     this.TranCam2DTo3D();
                 }
 
                 else //If done transition turn off.
                     CamTransitioning = false;
             else{ // Now we transition from 3D to 2D.
-                RPM.currentMap.camera = cameras["Perspective"];
-                this.TranCam3DTo2D();
+                console.log(cameras["Orthographic"].getThreeCamera());
+                console.log(cameras["Perspective"]);
+                Scene.Map.current.camera = cameras["Orthographic"];
+                //this.TranCam3DTo2D();
             }
         }
         else{//It contains no fov, so it must be 2D.
@@ -144,18 +149,18 @@ const inject = RPM.Manager.Plugins.inject;
 
     Map.prototype.TranCam3DTo2D = function(){
 
-        let turningAngle = 0.0125*RPM.currentMap.camera.verticalAngle;
+        let turningAngle = 0.0125*Scene.Map.current.camera.verticalAngle;
         //clamping
         if(turningAngle < 5.5)
             turningAngle = 5.5;
 
-        transitionCameraTo2D(this.camera, -1, RPM.currentMap.camera.verticalAngle);
+        transitionCameraTo2D(this.camera, -1, Scene.Map.current.camera.verticalAngle);
         this.RotateAllFaceSprites(turningAngle, false);
 
         //When the angle is close to desired result then...
-        if( Math.abs(RPM.currentMap.camera.verticalAngle) < 5){
+        if( Math.abs(Scene.Map.current.camera.verticalAngle) < 5){
             turningAngle = 55.5;
-            RPM.game.hero.move(0,0,0,0);    
+            RPM.Core.Game.current.hero.move(0,0,0,0);    
             //When finished change camera.
             this.camera = cameras["Orthographic"];
 
@@ -169,24 +174,24 @@ const inject = RPM.Manager.Plugins.inject;
     Map.prototype.TranCam2DTo3D = function(){
 
         transitionFaceSprites = true;
-        let turningAngle = RPM.currentMap.camera.verticalAngle*-0.0195;
+        let turningAngle = Scene.Map.current.camera.verticalAngle*-0.0195;
 
-        if( Math.abs(RPM.currentMap.camera.verticalAngle - originAngle) < 5){
+        if( Math.abs(Scene.Map.current.camera.verticalAngle - originAngle) < 5){
             turningAngle = originROT;
             transitionFaceSprites = false;
-            RPM.game.hero.move(0,0,0,0);
+            RPM.Core.Game.current.hero.move(0,0,0,0);
             
 
         }
         
-        transitionCameraTo3D(this.camera, -1, RPM.currentMap.camera.verticalAngle);
+        transitionCameraTo3D(this.camera, -1, Scene.Map.current.camera.verticalAngle);
         this.RotateAllFaceSprites(turningAngle, false);
 
         //Changes camera to perspective after transitioning is complete.
         if(!transitionFaceSprites)
-            RPM.currentMap.camera = cameras["Original"];
+            Scene.Map.current.camera = cameras["Original"];
         else
-            RPM.currentMap.camera = cameras["Perspective"];
+            Scene.Map.current.camera = cameras["Perspective"];
         
     }
 
@@ -196,7 +201,7 @@ const inject = RPM.Manager.Plugins.inject;
         if (!this.isBattleMap) 
         {
             // Update the objects
-            RPM.game.hero.updateRot2DCam(turningAngle);
+            RPM.Core.Game.current.hero.updateRot2DCam(turningAngle);
             this.updatePortions(this, function(x, y, z, i, j, k)
             {
                 // Update face sprites
@@ -229,20 +234,20 @@ const inject = RPM.Manager.Plugins.inject;
             timeLeft = 0;
         }
 
-        RPM.currentMap.camera.updateTargetPosition();
-        RPM.currentMap.camera.updateAngles();
-        RPM.currentMap.camera.updateDistance();
+        Scene.Map.current.camera.updateTargetPosition();
+        Scene.Map.current.camera.updateAngles();
+        Scene.Map.current.camera.updateDistance();
 
         // Rotation
 
 
-        RPM.currentMap.camera.horizontalAngle = 270;
-        RPM.currentMap.camera.verticalAngle = ( (originAngle) )*( (timeLeft/5000) );
+        Scene.Map.current.camera.horizontalAngle = 270;
+        Scene.Map.current.camera.verticalAngle = ( (originAngle) )*( (timeLeft/5000) );
         // Zoom
-        RPM.currentMap.camera.distance += (timeRate *  timeRate)*timeLeftRate*60;
+        Scene.Map.current.camera.distance += (timeRate *  timeRate)*timeLeftRate*60;
 
         // Update
-        RPM.currentMap.camera.update();
+        Scene.Map.current.camera.update();
         
 
         return originAngle;
@@ -267,20 +272,20 @@ const inject = RPM.Manager.Plugins.inject;
             timeLeft = 0;
         }
 
-        RPM.currentMap.camera.updateTargetPosition();
-        RPM.currentMap.camera.updateAngles();
-        RPM.currentMap.camera.updateDistance();
+        Scene.Map.current.camera.updateTargetPosition();
+        Scene.Map.current.camera.updateAngles();
+        Scene.Map.current.camera.updateDistance();
 
         // Rotation
 
 
-        RPM.currentMap.camera.horizontalAngle = 270;
-        RPM.currentMap.camera.verticalAngle += 0.001*RPM.elapsedTime*( (originAngle) )*( (timeLeft/5000) );
+        Scene.Map.current.camera.horizontalAngle = 270;
+        Scene.Map.current.camera.verticalAngle += 0.001*RPM.elapsedTime*( (originAngle) )*( (timeLeft/5000) );
         // Zoom
-        RPM.currentMap.camera.distance -= (timeRate *  timeRate)*timeLeftRate*55;
+        Scene.Map.current.camera.distance -= (timeRate *  timeRate)*timeLeftRate*55;
 
         // Update
-        RPM.currentMap.camera.update();
+        Scene.Map.current.camera.update();
 
 
 
@@ -347,29 +352,30 @@ const inject = RPM.Manager.Plugins.inject;
         await Alias_readMapProperties.call(this);
         
 
-        cameras["Perspective"] = this.camera;
+        if(Scene.Map.current.camera)
+            cameras["Perspective"] = Scene.Map.current.camera;
 
-        let sysCam = new SystemCameraProperties(null);
+        let sysCam = new CameraProperties(null);
         
         ///Sets these properties for orthographic camera.
-        sysCam.distance = this.camera.distance;
-        sysCam.horizontalAngle = this.camera.horizontalAngle;
-        sysCam.verticalAngle = this.camera.verticalAngle;
-        sysCam.targetOffsetX = 0
-        sysCam.targetOffsetY = 0
-        sysCam.targetOffsetZ = 0
-        sysCam.isSquareTargetOffsetX = 0
-        sysCam.isSquareTargetOffsetY = 0
-        sysCam.isSquareTargetOffsetZ = 0
-        sysCam.fov = "2D" //Can be any value as will be completely ignore by ThreeJS.
-        sysCam.near = 0
-        sysCam.far = 0
+        console.log(this.mapProperties.cameraProperties);
+        
 
+        sysCam.distance = this.mapProperties.cameraProperties.distance;
+        sysCam.horizontalAngle = this.mapProperties.cameraProperties.horizontalAngle;
+        sysCam.verticalAngle = this.mapProperties.cameraProperties.verticalAngle;
+        sysCam.targetOffsetX = this.mapProperties.cameraProperties.targetOffsetX;
+        sysCam.targetOffsetY = this.mapProperties.cameraProperties.targetOffsetY;
+        sysCam.targetOffsetZ = this.mapProperties.cameraProperties.targetOffsetZ;
+        sysCam.isSquareTargetOffsetX = this.mapProperties.cameraProperties.isSquareTargetOffsetX;
+        sysCam.isSquareTargetOffsetY = this.mapProperties.cameraProperties.isSquareTargetOffsetY;
+        sysCam.isSquareTargetOffsetZ = this.mapProperties.cameraProperties.isSquareTargetOffsetZ;
+        sysCam.fov = this.mapProperties.cameraProperties.fov; //Can be any value as will be completely ignore by ThreeJS.
+        sysCam.near = this.mapProperties.cameraProperties.near;
+        sysCam.far = this.mapProperties.cameraProperties.far;
 
-
-        cameras["Orthographic"] = new Camera(sysCam, RPM
-            .game.hero);
-
+        console.log(sysCam);
+        cameras["Orthographic"] = new Camera(sysCam, RPM.Core.Game.current.hero);
         //Create a copy of the scene's camera.
         cameras["Original"] = await this.UKL_GetNewCamera();
     }
@@ -411,29 +417,26 @@ const inject = RPM.Manager.Plugins.inject;
     Map.prototype.UKL_GetNewCamera = async function(){
 
         this.mapProperties = new MapProperties();
-        let json = await RPM.parseFileJSON(RPM.FILE_MAPS + this.mapName + RPM
+        let json = await RPM.Common.IO.parseFileJSON(RPM.Common.Paths.FILE_MAPS + this.mapName + RPM.Common.Paths
             .FILE_MAP_INFOS);
         this.mapProperties.read(json);
 
-        let cam = new Camera(this.mapProperties.cameraProperties, RPM
-            .game.hero);
+        let cam = new Camera(this.mapProperties.cameraProperties, RPM.Core.Game.current.hero);
 
         return cam;
     }
 
     var Alias_CameraUpdateAngles = Camera.prototype.updateAngles;
     Camera.prototype.updateAngles = function(angle){
-        if(this.threeCamera.fov)
+        if(this.getThreeCamera().fov)
             Alias_CameraUpdateAngles.call(this,angle);
         else{
             this.horizontalAngle = 270;
             this.verticalAngle = 0;
         }
     }
-    */
 })();
 
 RPM.Manager.Plugins.registerCommand(pluginName, "TransitionTo2D", () => {
-    console.log(Scene.Map.current);
-    //Scene.Map.current.TransitionTo2D();
+    Scene.Map.current.TransitionTo2D();
 });
